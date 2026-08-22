@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  --wa-ink: #0B1220;
+  --wa-ink-2: #121B2E;
+  --wa-primary: #0F7B6C;
+  --wa-primary-light: #17C994;
+  --wa-amber: #F59E0B;
+  --wa-red: #E5484D;
+  --wa-bg: #F5F7F8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--wa-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D3D9DE;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B7BFC6;
+}
+
+@keyframes wa-pulse {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  70% { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.wa-signal-dot {
+  position: relative;
+}
+.wa-signal-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--wa-primary-light);
+  animation: wa-pulse 2s ease-out infinite;
+}
