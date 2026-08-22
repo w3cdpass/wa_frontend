@@ -1,11 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../api/axiosInstance';
+import { ENDPOINTS } from '../api/endpoints';
 
 const AuthContext = createContext(null);
-
-const DEMO_VIRTUAL_NUMBER = '+91 92345 00110';
-const DEMO_OTP = '123456';
-const DEMO_ACCESS_TOKEN = 'demo-access-token';
 
 const validateEmail = (email) => {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,51 +13,21 @@ const validatePassword = (password) => {
   return password.length >= 8;
 };
 
-const getDemoUser = () => ({
-  id: 'demo-user-1',
-  name: 'Infyle Demo Reseller',
-  email: 'demo@infyle.com',
-  role: 'Reseller',
-  virtualNumber: DEMO_VIRTUAL_NUMBER,
-  businessName: 'Infyle Technologies',
-  connectedSince: new Date().toISOString(),
-  waBusinessStatus: 'connected',
-  tenantId: 'tenant-demo-1',
-});
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loadSession = useCallback(async () => {
     const token = localStorage.getItem('wa_access_token');
-    const stored = localStorage.getItem('wa_session_user');
-    
-    if (token && stored && token !== DEMO_ACCESS_TOKEN) {
+
+    if (token) {
       try {
-        const res = await axiosInstance.get('/auth/me');
+        const res = await axiosInstance.get(ENDPOINTS.AUTH.ME);
         setUser(res.user);
+        localStorage.setItem('wa_session_user', JSON.stringify(res.user));
       } catch {
-        localStorage.removeItem('wa_access_token');
-        localStorage.removeItem('wa_session_user');
-        localStorage.removeItem('wa_tenant_id');
-        localStorage.removeItem('wa_refresh_token');
-        // Fallback to demo user
-        const demoUser = getDemoUser();
-        setUser(demoUser);
-        localStorage.setItem('wa_session_user', JSON.stringify(demoUser));
-        localStorage.setItem('wa_access_token', DEMO_ACCESS_TOKEN);
-        localStorage.setItem('wa_tenant_id', 'tenant-demo-1');
+        clearSession();
       }
-    } else if (stored) {
-      setUser(JSON.parse(stored));
-    } else {
-      // No session - auto-login with demo user for development
-      const demoUser = getDemoUser();
-      setUser(demoUser);
-      localStorage.setItem('wa_session_user', JSON.stringify(demoUser));
-      localStorage.setItem('wa_access_token', DEMO_ACCESS_TOKEN);
-      localStorage.setItem('wa_tenant_id', 'tenant-demo-1');
     }
     setLoading(false);
   }, []);
@@ -69,10 +36,10 @@ export const AuthProvider = ({ children }) => {
     loadSession();
   }, [loadSession]);
 
-  const setSession = (userData, accessToken, tenantId = 'tenant-demo-1') => {
+  const setSession = (userData, accessToken, tenantId) => {
     localStorage.setItem('wa_session_user', JSON.stringify(userData));
     localStorage.setItem('wa_access_token', accessToken);
-    localStorage.setItem('wa_tenant_id', tenantId);
+    if (tenantId) localStorage.setItem('wa_tenant_id', String(tenantId));
     setUser(userData);
   };
 
@@ -80,40 +47,24 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('wa_session_user');
     localStorage.removeItem('wa_access_token');
     localStorage.removeItem('wa_tenant_id');
-    localStorage.removeItem('wa_refresh_token');
     setUser(null);
   };
 
   const requestOtp = async (virtualNumber) => {
-    await new Promise((r) => setTimeout(r, 700));
-    if (virtualNumber.replace(/\s/g, '') !== DEMO_VIRTUAL_NUMBER.replace(/\s/g, '')) {
-      throw new Error('Virtual number not recognized. Use the demo number shown below.');
+    try {
+      return await axiosInstance.post(ENDPOINTS.AUTH.REQUEST_OTP, { virtualNumber });
+    } catch (error) {
+      throw new Error(error.message || 'Could not send OTP');
     }
-    return { sent: true, expiresIn: 300 };
   };
 
   const verifyOtp = async (virtualNumber, otp) => {
-    await new Promise((r) => setTimeout(r, 900));
-    if (otp !== DEMO_OTP) {
-      throw new Error('Incorrect OTP. Please try again.');
-    }
-
     try {
-      const res = await axiosInstance.post('/auth/verify-otp', { virtualNumber, otp });
+      const res = await axiosInstance.post(ENDPOINTS.AUTH.VERIFY_OTP, { virtualNumber, otp });
       setSession(res.user, res.accessToken, res.user.tenantId);
       return res.user;
-    } catch {
-      const sessionUser = {
-        name: 'Infyle Demo Reseller',
-        role: 'Reseller',
-        virtualNumber,
-        businessName: 'Infyle Technologies',
-        connectedSince: new Date().toISOString(),
-        waBusinessStatus: 'connected',
-        tenantId: 'tenant-demo-1',
-      };
-      setSession(sessionUser, 'demo-access-token', 'tenant-demo-1');
-      return sessionUser;
+    } catch (error) {
+      throw new Error(error.message || 'OTP verification failed');
     }
   };
 
@@ -126,7 +77,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const res = await axiosInstance.post('/auth/login', { email, password });
+      const res = await axiosInstance.post(ENDPOINTS.AUTH.LOGIN, { email, password });
       setSession(res.user, res.accessToken, res.user.tenantId);
       return res.user;
     } catch (error) {
@@ -151,7 +102,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const res = await axiosInstance.post('/auth/signup', { name, email, password });
+      const res = await axiosInstance.post(ENDPOINTS.AUTH.SIGNUP, { name, email, password });
       setSession(res.user, res.accessToken, res.user.tenantId);
       return res.user;
     } catch (error) {
@@ -162,7 +113,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axiosInstance.post('/auth/logout');
+      await axiosInstance.post(ENDPOINTS.AUTH.LOGOUT);
     } catch {
       // Ignore logout errors
     }
@@ -179,8 +130,6 @@ export const AuthProvider = ({ children }) => {
         login,
         signup,
         logout,
-        DEMO_VIRTUAL_NUMBER,
-        DEMO_OTP,
       }}
     >
       {children}

@@ -40,11 +40,8 @@ axiosInstance.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const originalRequest = error.config;
-    const token = localStorage.getItem('wa_access_token');
 
-    const isDemo = token === 'demo-access-token';
-
-    if (error.response?.status === 401 && !originalRequest._retry && !isDemo) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           pendingQueue.push({ resolve, reject });

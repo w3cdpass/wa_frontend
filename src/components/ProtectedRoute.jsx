@@ -14,10 +14,6 @@ export default function ProtectedRoute({ children }) {
   }
 
   if (!user) {
-    const demoUser = localStorage.getItem('wa_session_user');
-    if (demoUser) {
-      return children;
-    }
     return <Navigate to="/login" replace />;
   }
   return children;

@@ -14,6 +14,9 @@ import PersonIcon from '@mui/icons-material/Person';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
+const DEMO_VIRTUAL_NUMBER = '+91 92345 00110';
+const DEMO_OTP = '123456';
+
 export default function Login() {
   const location = useLocation();
   const [mode, setMode] = useState(() => location.pathname === '/signup' ? 'signup' : 'login');
@@ -40,7 +43,7 @@ export default function Login() {
   const [otp, setOtp] = useState('');
   const [otpStep, setOtpStep] = useState(1);
 
-  const { login, signup, requestOtp, verifyOtp, DEMO_VIRTUAL_NUMBER, DEMO_OTP } = useAuth();
+  const { login, signup, requestOtp, verifyOtp } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
