@@ -60,6 +60,15 @@ const api = {
   listNotifications: (params) => axiosInstance.get(ENDPOINTS.NOTIFICATIONS.LIST, { params }),
   markAsRead: (id) => axiosInstance.post(ENDPOINTS.NOTIFICATIONS.MARK_READ(id)),
   markAllAsRead: () => axiosInstance.post(ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ),
+
+  // WhatsApp connection
+  getWaConfig: () => axiosInstance.get(ENDPOINTS.WHATSAPP.CONFIG),
+  saveWaConfig: (data) => axiosInstance.post(ENDPOINTS.WHATSAPP.CONFIG, data),
+  connectWhatsApp: () => axiosInstance.post(ENDPOINTS.WHATSAPP.CONNECT),
+  disconnectWhatsApp: () => axiosInstance.post(ENDPOINTS.WHATSAPP.DISCONNECT),
+  getWebhookInfo: () => axiosInstance.get(ENDPOINTS.WHATSAPP.WEBHOOK_INFO),
+  syncTemplates: () => axiosInstance.post(ENDPOINTS.WHATSAPP.TEMPLATES_SYNC),
+  listTemplates: (params) => axiosInstance.get(ENDPOINTS.WHATSAPP.TEMPLATES, { params }),
 };
 
 export default api;

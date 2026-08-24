@@ -94,6 +94,16 @@ export const ENDPOINTS = {
     MARK_READ: (id) => `/notifications/${id}/read`, // POST
     MARK_ALL_READ: '/notifications/read-all',       // POST
   },
+
+  // ---------------- WHATSAPP CONNECTION / TEMPLATES ----------------
+  WHATSAPP: {
+    CONFIG: '/whatsapp/config',             // GET masked config+status | POST save credentials
+    CONNECT: '/whatsapp/connect',           // POST validate creds with Meta & register
+    DISCONNECT: '/whatsapp/disconnect',     // POST
+    WEBHOOK_INFO: '/whatsapp/webhook-info', // GET   { callbackUrl, verifyToken }
+    TEMPLATES_SYNC: '/whatsapp/templates/sync', // POST pull templates from Meta
+    TEMPLATES: '/whatsapp/templates',       // GET   ?status=&category=&search=
+  },
 };
 
 export default ENDPOINTS;
