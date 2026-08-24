@@ -14,6 +14,7 @@ import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import NoteAltRoundedIcon from '@mui/icons-material/NoteAltRounded';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +25,7 @@ const DRAWER_WIDTH = 260;
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: DashboardRoundedIcon },
   { label: 'Connect WhatsApp', path: '/connect-whatsapp', icon: WhatsAppIcon },
+  { label: 'Templates', path: '/templates', icon: NoteAltRoundedIcon },
   { label: 'Send via WA', path: '/send-via-wa', icon: SendRoundedIcon },
   { label: 'ChatBot', path: '/chatbot', icon: PersonRoundedIcon },
   { label: 'WA History', path: '/wa-history', icon: HistoryRoundedIcon },
@@ -36,6 +38,8 @@ const NAV_ITEMS = [
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
   '/connect-whatsapp': 'Connect WhatsApp',
+  '/templates': 'Message Templates',
+  '/templates/new': 'Create Template',
   '/send-via-wa': 'Send via WA',
   '/chatbot': 'ChatBot',
   '/wa-history': 'WA History',
@@ -81,7 +85,8 @@ export default function DashboardLayout() {
       <List sx={{ flex: 1, px: 1.5, py: 2 }}>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const active = location.pathname === item.path;
+          const active = location.pathname === item.path ||
+            (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
           return (
             <ListItemButton
               key={item.path}

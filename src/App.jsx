@@ -11,6 +11,8 @@ import Login from './pages/Login';
 import WhatsAppFlowBuilder  from './pages/whatsapp-flow-builder';
 import Dashboard from './pages/Dashboard';
 import ConnectWhatsApp from './pages/ConnectWhatsApp';
+import Templates from './pages/Templates';
+import TemplateBuilder from './pages/TemplateBuilder';
 import SendViaWA from './pages/SendViaWA';
 import WappHistory from './pages/WappHistory';
 import ScheduledHistory from './pages/ScheduledHistory';
@@ -38,6 +40,8 @@ export default function App() {
                 >
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/connect-whatsapp" element={<ConnectWhatsApp />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/templates/new" element={<TemplateBuilder />} />
                   <Route path="/send-via-wa" element={<SendViaWA />} />
                   <Route path="/chatbot" element={<WhatsAppFlowBuilder />} />
                   <Route path="/wa-history" element={<WappHistory />} />

@@ -103,6 +103,9 @@ export const ENDPOINTS = {
     WEBHOOK_INFO: '/whatsapp/webhook-info', // GET   { callbackUrl, verifyToken }
     TEMPLATES_SYNC: '/whatsapp/templates/sync', // POST pull templates from Meta
     TEMPLATES: '/whatsapp/templates',       // GET   ?status=&category=&search=
+    TEMPLATE_CREATE: '/whatsapp/templates', // POST  full payload (see validators)
+    TEMPLATE_BY_ID: (id) => `/whatsapp/templates/${id}`, // GET / PUT / DELETE
+    TEMPLATE_SUBMIT: (id) => `/whatsapp/templates/${id}/submit`, // POST -> Meta approval
   },
 };
 

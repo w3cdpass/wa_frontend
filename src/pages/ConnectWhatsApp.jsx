@@ -13,6 +13,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
@@ -59,7 +60,22 @@ export default function ConnectWhatsApp() {
   const [templates, setTemplates] = useState([]);
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editing, setEditing] = useState(false);
   const [showSecrets, setShowSecrets] = useState({});
+
+  const configured = !!waConfig?.configured;
+  // Not-yet-configured tenants always see an editable form
+  const isEditing = editing || !configured;
+
+  useEffect(() => {
+    if (waConfig?.config) {
+      setForm((f) => ({
+        ...f,
+        phoneNumberId: waConfig.config.phoneNumberId || f.phoneNumberId,
+        wabaId: waConfig.config.wabaId || f.wabaId,
+      }));
+    }
+  }, [waConfig]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -102,19 +118,32 @@ export default function ConnectWhatsApp() {
   });
 
   const handleSaveAndConnect = async () => {
-    if (!form.accessToken || !form.phoneNumberId || !(form.wabaId)) {
+    // Build payload from non-empty fields only — blanks keep stored values
+    const payload = Object.fromEntries(
+      Object.entries(form).filter(([, v]) => String(v).trim() !== '')
+    );
+
+    if (!configured && (!payload.accessToken || !payload.phoneNumberId || !payload.wabaId)) {
       showToast('Access Token, Phone Number ID and WABA ID are required', 'error');
       return;
     }
+    if (configured && !payload.phoneNumberId) {
+      showToast('Phone Number ID is required', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
-      await api.saveWaConfig(form);
+      await api.saveWaConfig(payload);
       showToast('Credentials saved', 'success');
       setConnecting(true);
       try {
-        await api.connectWhatsApp();
+        const res = await api.connectWhatsApp();
         showToast('WhatsApp connected successfully', 'success');
-        setForm(EMPTY_FORM);
+        if (res?.templateSync && res.templateSync.total > 0) {
+          showToast(`Imported ${res.templateSync.created + res.templateSync.updated} template(s) from Meta`, 'info');
+        }
+        setEditing(false);
         await loadAll();
       } catch (err) {
         showToast(err.message || 'Meta rejected the credentials', 'error');
@@ -126,6 +155,11 @@ export default function ConnectWhatsApp() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setForm(EMPTY_FORM);
   };
 
   const handleDisconnect = async () => {
@@ -142,7 +176,11 @@ export default function ConnectWhatsApp() {
     setSyncing(true);
     try {
       const res = await api.syncTemplates();
-      showToast(`Synced: ${res.created} new, ${res.updated} updated`, 'success');
+      if (res?.errors > 0) {
+        showToast(`Synced with ${res.errors} error(s): ${res.errorDetails?.[0]?.message || ''}`, 'warning');
+      } else {
+        showToast(`Synced: ${res.created} new, ${res.updated} updated`, 'success');
+      }
       const tplRes = await api.listTemplates();
       setTemplates(tplRes.templates || []);
     } catch (err) {
@@ -161,7 +199,7 @@ export default function ConnectWhatsApp() {
     }
   };
 
-  const connected = waConfig?.config?.status === 'connected' && waConfig?.config?.isRegistered !== false && waConfig?.configured;
+  const connected = !!waConfig?.configured && waConfig?.config?.status === 'connected';
 
   if (loading) {
     return (
@@ -205,6 +243,13 @@ export default function ConnectWhatsApp() {
         {/* LEFT: credentials + connection */}
         <Grid item xs={12} lg={7}>
           <Stack spacing={2.5}>
+            {connected && !waConfig?.config?.isRegistered && (
+              <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                Credentials are valid, but this phone number is not registered for Cloud API messaging yet.
+                Enter your <strong>6-digit registration PIN</strong> above and click Reconnect to finish registration.
+              </Alert>
+            )}
+
             {/* Connection status card */}
             {connected && waConfig?.config && (
               <Card sx={{ p: 3, borderRadius: 3, borderLeft: '4px solid #17C994' }}>
@@ -260,13 +305,20 @@ export default function ConnectWhatsApp() {
               <Stack spacing={2}>
                 <TextField
                   label="Permanent access token"
-                  placeholder="EAAG..."
+                  placeholder={configured ? 'Saved — leave blank to keep current' : 'EAAG...'}
                   value={form.accessToken}
                   onChange={setField('accessToken')}
                   fullWidth
-                  required
+                  required={!configured}
+                  disabled={!isEditing}
                   {...secretFieldProps('accessToken')}
-                  helperText="System-user token with whatsapp_business_messaging + whatsapp_business_management permissions"
+                  helperText={
+                    configured && !isEditing
+                      ? 'Stored encrypted — never displayed again'
+                      : isEditing && configured
+                        ? 'Leave blank to keep the saved token'
+                        : 'System-user token with whatsapp_business_messaging + whatsapp_business_management permissions'
+                  }
                 />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
@@ -275,6 +327,7 @@ export default function ConnectWhatsApp() {
                     onChange={setField('phoneNumberId')}
                     fullWidth
                     required
+                    disabled={!isEditing}
                     helperText="'Phone number ID' on the API Setup page"
                   />
                   <TextField
@@ -283,23 +336,28 @@ export default function ConnectWhatsApp() {
                     onChange={setField('wabaId')}
                     fullWidth
                     required
+                    disabled={!isEditing}
                     helperText="'WhatsApp Business Account ID' on the API Setup page"
                   />
                 </Stack>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
                     label="App secret"
+                    placeholder={configured ? 'Saved — leave blank to keep current' : ''}
                     value={form.appSecret}
                     onChange={setField('appSecret')}
                     fullWidth
+                    disabled={!isEditing}
                     {...secretFieldProps('appSecret')}
                     helperText="App settings > Basic — used to verify webhook signatures"
                   />
                   <TextField
                     label="Registration PIN (6 digits)"
+                    placeholder={configured ? 'Saved — leave blank to keep current' : ''}
                     value={form.pin}
                     onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
                     fullWidth
+                    disabled={!isEditing}
                     inputProps={{ inputMode: 'numeric', maxLength: 6 }}
                     helperText="Two-step verification PIN — enables phone registration"
                   />
@@ -307,14 +365,55 @@ export default function ConnectWhatsApp() {
               </Stack>
 
               <Stack direction="row" spacing={1} sx={{ mt: 3 }}>
-                <Button
-                  variant="contained"
-                  startIcon={(saving || connecting) ? <CircularProgress size={18} color="inherit" /> : <LinkRoundedIcon />}
-                  disabled={saving || connecting}
-                  onClick={handleSaveAndConnect}
-                >
-                  {saving ? 'Saving…' : connecting ? 'Verifying with Meta…' : connected ? 'Reconnect' : 'Save & Connect'}
-                </Button>
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      startIcon={(saving || connecting) ? <CircularProgress size={18} color="inherit" /> : <LinkRoundedIcon />}
+                      disabled={saving || connecting}
+                      onClick={handleSaveAndConnect}
+                    >
+                      {saving ? 'Saving…' : connecting ? 'Verifying with Meta…' : configured ? 'Save & Reconnect' : 'Save & Connect'}
+                    </Button>
+                    {configured && (
+                      <Button color="inherit" disabled={saving || connecting} onClick={handleCancelEdit}>
+                        Cancel
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outlined"
+                      startIcon={<EditRoundedIcon />}
+                      onClick={() => setEditing(true)}
+                    >
+                      Edit credentials
+                    </Button>
+                    <Button
+                      variant="text"
+                      startIcon={<LinkRoundedIcon />}
+                      onClick={async () => {
+                        setConnecting(true);
+                        try {
+                          const res = await api.connectWhatsApp();
+                          showToast('Reconnected successfully', 'success');
+                          if (res?.templateSync && res.templateSync.total > 0) {
+                            showToast(`Imported ${res.templateSync.created + res.templateSync.updated} template(s)`, 'info');
+                          }
+                          await loadAll();
+                        } catch (err) {
+                          showToast(err.message || 'Reconnect failed', 'error');
+                        } finally {
+                          setConnecting(false);
+                        }
+                      }}
+                      disabled={connecting}
+                    >
+                      {connecting ? <CircularProgress size={18} /> : 'Reconnect'}
+                    </Button>
+                  </>
+                )}
               </Stack>
             </Card>
 

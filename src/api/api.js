@@ -69,6 +69,11 @@ const api = {
   getWebhookInfo: () => axiosInstance.get(ENDPOINTS.WHATSAPP.WEBHOOK_INFO),
   syncTemplates: () => axiosInstance.post(ENDPOINTS.WHATSAPP.TEMPLATES_SYNC),
   listTemplates: (params) => axiosInstance.get(ENDPOINTS.WHATSAPP.TEMPLATES, { params }),
+  getTemplate: (id) => axiosInstance.get(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id)),
+  createTemplate: (data) => axiosInstance.post(ENDPOINTS.WHATSAPP.TEMPLATE_CREATE, data),
+  updateTemplate: (id, data) => axiosInstance.put(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id), data),
+  deleteTemplate: (id) => axiosInstance.delete(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id)),
+  submitTemplate: (id) => axiosInstance.post(ENDPOINTS.WHATSAPP.TEMPLATE_SUBMIT(id)),
 };
 
 export default api;
