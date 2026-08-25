@@ -525,7 +525,7 @@ export default function ConnectWhatsApp() {
                   </Typography>
                   <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 1.5 }}>
                     {subState.subscribed == null ? (
-                      <Chip size="small" label={subState.checking ? 'Checking…' : 'Unknown'} variant="outlined" />
+                      <Chip size="small" label={subState.checking ? 'Checking…' : 'Not subscribed'} variant="outlined" />
                     ) : subState.subscribed ? (
                       <Chip size="small" color="success" label="Webhooks active" />
                     ) : (
@@ -534,7 +534,7 @@ export default function ConnectWhatsApp() {
                     <Button
                       size="small"
                       variant="contained"
-                      disabled={!configured || subState.subscribing || subState.subscribed}
+                      disabled={subState.subscribing || subState.subscribed === true}
                       startIcon={subState.subscribing ? <CircularProgress size={16} color="inherit" /> : undefined}
                       onClick={async () => {
                         setSubState((s) => ({ ...s, subscribing: true }));
@@ -543,7 +543,7 @@ export default function ConnectWhatsApp() {
                           setSubState((s) => ({ ...s, subscribed: true }));
                           showToast('Subscribed — template approvals now arrive instantly', 'success');
                         } catch (e) {
-                          showToast(e.message || 'Subscription failed', 'error');
+                          showToast(e.message || 'Subscription failed — check credentials are saved', 'error');
                         } finally {
                           setSubState((s) => ({ ...s, subscribing: false }));
                         }
@@ -552,11 +552,6 @@ export default function ConnectWhatsApp() {
                       {subState.subscribed ? 'Active' : 'Enable instantly'}
                     </Button>
                   </Stack>
-                  {!configured && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                      Save your credentials first — this uses the stored access token, no Meta dashboard needed.
-                    </Typography>
-                  )}
                 </Box>
               </Step>
             </Stepper>
