@@ -76,6 +76,7 @@ const api = {
   updateTemplate: (id, data) => axiosInstance.put(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id), data),
   deleteTemplate: (id) => axiosInstance.delete(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id)),
   submitTemplate: (id) => axiosInstance.post(ENDPOINTS.WHATSAPP.TEMPLATE_SUBMIT(id)),
+  sendTestTemplate: (templateId, phone) => axiosInstance.post(ENDPOINTS.WHATSAPP.SEND_TEST, { templateId, phone }),
 
   listVariables: (params) => axiosInstance.get(ENDPOINTS.VARIABLES.LIST, { params }),
   createVariable: (data) => axiosInstance.post(ENDPOINTS.VARIABLES.CREATE, data),

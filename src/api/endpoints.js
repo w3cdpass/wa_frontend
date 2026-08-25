@@ -108,6 +108,7 @@ export const ENDPOINTS = {
     TEMPLATE_CREATE: '/whatsapp/templates', // POST  full payload (see validators)
     TEMPLATE_BY_ID: (id) => `/whatsapp/templates/${id}`, // GET / PUT / DELETE
     TEMPLATE_SUBMIT: (id) => `/whatsapp/templates/${id}/submit`, // POST -> Meta approval
+    SEND_TEST: '/whatsapp/templates/send-test', // POST { templateId, phone }
   },
   VARIABLES: {
     LIST: '/variables',                      // GET  ?search=

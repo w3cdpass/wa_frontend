@@ -51,6 +51,9 @@ export default function Templates() {
   // preview dialog
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [sendTest, setSendTest] = useState(null);
+  const [sendTestPhone, setSendTestPhone] = useState('919878261754');
+  const [sendTestLoading, setSendTestLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,6 +267,13 @@ export default function Templates() {
                           <VisibilityOutlinedIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      {t.status === 'APPROVED' && (
+                        <Tooltip title="Send test to your phone">
+                          <IconButton size="small" onClick={() => setSendTest({ templateId: t._id, templateName: t.name })}>
+                            <SendRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <IconButton size="small" onClick={(e) => setMenu({ templateId: t._id, anchorEl: e.currentTarget })}>
                         <MoreVertRoundedIcon />
                       </IconButton>
@@ -338,6 +348,48 @@ export default function Templates() {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setPreviewTemplate(null)}>Close</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+
+      {/* Send Test dialog */}
+      <Dialog open={Boolean(sendTest)} onClose={() => setSendTest(null)} maxWidth="xs" fullWidth>
+        {sendTest && (
+          <>
+            <DialogTitle>
+              <Typography fontWeight={800}>Send test: {sendTest.templateName}</Typography>
+            </DialogTitle>
+            <DialogContent>
+              <TextField
+                fullWidth size="small" label="Phone number with country code"
+                value={sendTestPhone}
+                onChange={(e) => setSendTestPhone(e.target.value)}
+                placeholder="919878261754"
+                sx={{ mt: 1 }}
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSendTest(null)}>Cancel</Button>
+              <Button
+                variant="contained"
+                disabled={sendTestLoading || !sendTestPhone}
+                startIcon={sendTestLoading ? <CircularProgress size={16} /> : <SendRoundedIcon />}
+                onClick={async () => {
+                  setSendTestLoading(true);
+                  try {
+                    await api.sendTestTemplate(sendTest.templateId, sendTestPhone);
+                    showToast('Template sent! Check your WhatsApp.', 'success');
+                    setSendTest(null);
+                  } catch (e) {
+                    showToast(e.response?.data?.message || e.message || 'Send failed', 'error');
+                  } finally {
+                    setSendTestLoading(false);
+                  }
+                }}
+              >
+                Send Now
+              </Button>
             </DialogActions>
           </>
         )}
