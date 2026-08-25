@@ -1046,8 +1046,7 @@ export default function WhatsAppFlowBuilder() {
       if (!n || nodeKeyToId(key) === null) return;
       nodes.push({
         nodeKey: key,
-        nodeType: n.name,
-        backendNodeType: BACKEND_NODE_TYPE_MAP[n.name] || 'send_message',
+        nodeType: BACKEND_NODE_TYPE_MAP[n.name] || n.name,
         config: n.data || {},
         position: { x: Math.round(n.pos_x), y: Math.round(n.pos_y) },
       });
