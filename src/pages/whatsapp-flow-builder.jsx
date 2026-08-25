@@ -390,6 +390,8 @@ const BACKEND_NODE_TYPE_MAP = {
   'otp-send': 'send_message',
   'otp-verify': 'collect_input',
   'opt-out': 'end',
+  'send-template': 'send_template',
+  'wait-reply': 'collect_input',
 };
 
 const STATUS_COLORS = {
