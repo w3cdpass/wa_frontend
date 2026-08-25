@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import Login from './pages/Login';
 import WhatsAppFlowBuilder  from './pages/whatsapp-flow-builder';
+import SendFlow from './pages/SendFlow';
 import Dashboard from './pages/Dashboard';
 import ConnectWhatsApp from './pages/ConnectWhatsApp';
 import Templates from './pages/Templates';
@@ -49,6 +50,8 @@ export default function App() {
                   <Route path="/send-template/:id" element={<SendTemplateCampaign />} />
                   <Route path="/send-via-wa" element={<SendViaWA />} />
                   <Route path="/chatbot" element={<WhatsAppFlowBuilder />} />
+                  <Route path="/send-flow" element={<SendFlow />} />
+                  <Route path="/send-flow/:id" element={<SendFlow />} />
                   <Route path="/wa-history" element={<WappHistory />} />
                   <Route path="/scheduled" element={<ScheduledHistory />} />
                   <Route path="/manage-users" element={<ManageUsers />} />

@@ -89,6 +89,14 @@ const api = {
   pauseBroadcast: (id) => axiosInstance.post(ENDPOINTS.BROADCASTS.PAUSE(id)),
   resumeBroadcast: (id) => axiosInstance.post(ENDPOINTS.BROADCASTS.RESUME(id)),
   contactTags: () => axiosInstance.get(ENDPOINTS.CONTACTS.TAGS),
+  // Flows
+  listFlows: () => axiosInstance.get(ENDPOINTS.FLOWS.LIST),
+  saveFlow: (data) => axiosInstance.post(ENDPOINTS.FLOWS.SAVE, data),
+  getFlow: (id) => axiosInstance.get(ENDPOINTS.FLOWS.GET(id)),
+  deleteFlow: (id) => axiosInstance.delete(ENDPOINTS.FLOWS.DELETE(id)),
+  sendFlow: (id, recipients) => axiosInstance.post(ENDPOINTS.FLOWS.SEND(id), { recipients }),
+  getFlowRuns: (id) => axiosInstance.get(ENDPOINTS.FLOWS.RUNS(id)),
+  getFlowRun: (id) => axiosInstance.get(ENDPOINTS.FLOWS.RUN(id)),
 };
 
 export default api;

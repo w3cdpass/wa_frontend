@@ -48,7 +48,9 @@ import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import Drawflow from 'drawflow';
+import api from '../api/api';
 import 'drawflow/dist/drawflow.min.css';
 import dayjs from 'dayjs';
 import { useToast } from '../context/ToastContext';
@@ -179,6 +181,18 @@ const SCHEMAS = {
       { key: 'maxAttempts', type: 'select', label: 'Max attempts', options: ['1', '3', '5'] },
     ],
   },
+  'send-template': {
+    label: 'Template Message', icon: '📨', category: 'interactive', preview: true, isNew: true,
+    fields: [
+      { key: 'templateName', type: 'template-select', label: 'Approved template' },
+    ],
+  },
+  'wait-reply': {
+    label: 'Wait for Reply', icon: '⏸️', category: 'advanced', isNew: true,
+    fields: [
+      { key: 'prompt', type: 'text', label: 'Prompt (shown in preview only)', placeholder: 'Waiting for user reply…' },
+    ],
+  },
   'opt-out': {
     label: 'Opt-out Number', icon: '🚫', category: 'advanced', terminal: true,
     fields: [],
@@ -190,6 +204,7 @@ const TERMINAL_TYPES = Object.keys(SCHEMAS).filter((t) => SCHEMAS[t].terminal);
 const MESSAGE_TYPES = [
   'text-reply', 'media-caption', 'request-location', 'text-button',
   'media-button', 'text-list', 'url-button', 'wapp-form', 'otp-send', 'otp-verify',
+  'send-template', 'wait-reply',
 ];
 
 const ACTION_STATUS = {
@@ -238,6 +253,7 @@ const outputCount = (type, data = {}) => {
   if (type === 'otp-verify') return 2;
   if (SCHEMAS[type]?.terminal) return 0;
   if (type === 'text-button' || type === 'media-button') return Math.max(1, (data.buttons || []).length);
+  if (type === 'send-template') return Math.max(1, (data.templateButtons || []).length);
   return 1;
 };
 
@@ -245,6 +261,8 @@ const branchLabels = (type, data = {}) => {
   if (type === 'otp-verify') return SCHEMAS['otp-verify'].branches;
   if (type === 'text-button' || type === 'media-button')
     return (data.buttons || []).map((b) => b.label || 'Button');
+  if (type === 'send-template')
+    return (data.templateButtons || []).map((b) => b.title || 'Button');
   return ['Next'];
 };
 
@@ -561,6 +579,53 @@ function MediaField({ value, onChange }) {
   );
 }
 
+function TemplateSelectField({ field, value, onChange }) {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.listTemplates({ status: 'APPROVED', limit: 100 })
+      .then((res) => setTemplates(res.templates || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleChange = (templateName) => {
+    const tpl = templates.find((t) => t.name === templateName);
+    onChange(templateName, {
+      templateName,
+      templateId: tpl?._id,
+      templateCategory: tpl?.category,
+      templateLanguage: tpl?.language,
+      templateButtons: (tpl?.buttons || []).map((b, i) => ({
+        title: b.text,
+        type: b.type,
+        index: i,
+      })),
+    });
+  };
+
+  return (
+    <Box>
+      <Typography sx={{ fontSize: 10.5, color: 'text.secondary', mb: 0.25 }}>{field.label}</Typography>
+      <Select
+        size="small" fullWidth
+        value={value || ''}
+        onChange={(e) => handleChange(e.target.value)}
+        disabled={loading}
+        sx={{ fontSize: 12.5 }}
+      >
+        {templates.map((t) => (
+          <MenuItem key={t._id} value={t.name} sx={{ fontSize: 12.5 }}>
+            {t.name} ({t.category}) — {(t.buttons || []).length} button{(t.buttons || []).length !== 1 ? 's' : ''}
+          </MenuItem>
+        ))}
+      </Select>
+      {loading && <Typography variant="caption" color="text.secondary">Loading templates…</Typography>}
+    </Box>
+  );
+}
+
 function Field({ field, value, onChange }) {
   switch (field.type) {
     case 'text':
@@ -598,6 +663,8 @@ function Field({ field, value, onChange }) {
           </Select>
         </Box>
       );
+    case 'template-select':
+      return <TemplateSelectField field={field} value={value} onChange={onChange} />;
     case 'buttons':
       return (
         <Box>
@@ -1317,6 +1384,25 @@ const onDrop = (e) => {
     showToast?.(`"${meta.name}" saved (${stats.nodes} blocks, ${stats.links} connections)`, 'success');
   };
 
+  const handleSaveToServer = async () => {
+    if (!meta.name.trim()) {
+      showToast?.('Give your flow a name first', 'warning');
+      return;
+    }
+    try {
+      const doc = toFlowDoc();
+      // Add outputIndex to edges from multi-output nodes for FlowEngine routing
+      const edgesWithIndex = doc.edges.map((e) => {
+        const match = e.sourceHandle?.match(/^output_(\d+)$/);
+        return match ? { ...e, outputIndex: parseInt(match[1], 10) } : e;
+      });
+      await api.saveFlow({ ...doc, edges: edgesWithIndex, status: 'active' });
+      showToast?.(`"${meta.name}" saved to server`, 'success');
+    } catch (e) {
+      showToast?.(e.message || 'Failed to save to server', 'error');
+    }
+  };
+
   const zoom = (dir) => {
     const ed = editorRef.current;
     if (!ed) return;
@@ -1693,6 +1779,9 @@ const onDrop = (e) => {
           <Button startIcon={<SaveRoundedIcon />} size="small" variant="contained" onClick={handleSave} sx={{ bgcolor: THEME.primary, fontSize: 12 }}>
             Save
           </Button>
+          <Button startIcon={<CloudUploadRoundedIcon />} size="small" variant="outlined" onClick={handleSaveToServer} sx={{ fontSize: 12 }}>
+            Save to Server
+          </Button>
           <Tooltip title="Export JSON">
             <IconButton size="small" onClick={handleExport}><FileDownloadRoundedIcon fontSize="small" /></IconButton>
           </Tooltip>
@@ -1849,7 +1938,11 @@ const onDrop = (e) => {
                   </Typography>
                 )}
                 {selSchema.fields.map((f) => (
-                  <Field key={f.key} field={f} value={selData[f.key]} onChange={(v) => patchSelData({ [f.key]: v })} />
+                  <Field key={f.key} field={f} value={selData[f.key]} onChange={(v, extra) => {
+                    const patch = { [f.key]: v };
+                    if (extra) Object.assign(patch, extra);
+                    patchSelData(patch);
+                  }} />
                 ))}
 
                 {selSchema.preview && (

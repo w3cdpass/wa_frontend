@@ -122,6 +122,15 @@ export const ENDPOINTS = {
     PAUSE: (id) => `/broadcasts/${id}/pause`,   // POST
     RESUME: (id) => `/broadcasts/${id}/resume`, // POST
   },
+  FLOWS: {
+    LIST: '/flows',                        // GET
+    SAVE: '/flows',                        // POST create/update
+    GET: (id) => `/flows/${id}`,           // GET
+    DELETE: (id) => `/flows/${id}`,        // DELETE
+    SEND: (id) => `/flows/${id}/send`,     // POST { recipients }
+    RUNS: (id) => `/flows/${id}/runs`,     // GET list runs
+    RUN: (id) => `/flows/runs/${id}`,      // GET single run
+  },
 };
 
 export default ENDPOINTS;
