@@ -102,6 +102,7 @@ export const ENDPOINTS = {
     CONNECT: '/whatsapp/connect',           // POST validate creds with Meta & register
     DISCONNECT: '/whatsapp/disconnect',     // POST
     WEBHOOK_INFO: '/whatsapp/webhook-info', // GET   { callbackUrl, verifyToken }
+    WEBHOOK_SUBSCRIPTION: '/whatsapp/webhook/subscription', // GET status / POST subscribe
     TEMPLATES_SYNC: '/whatsapp/templates/sync', // POST pull templates from Meta
     TEMPLATES: '/whatsapp/templates',       // GET   ?status=&category=&search=
     TEMPLATE_CREATE: '/whatsapp/templates', // POST  full payload (see validators)

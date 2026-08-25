@@ -58,6 +58,7 @@ export default function ConnectWhatsApp() {
   const [waConfig, setWaConfig] = useState(null);
   const [webhookInfo, setWebhookInfo] = useState(null);
   const [templates, setTemplates] = useState([]);
+  const [subState, setSubState] = useState({ checking: false, subscribed: null, subscribing: false });
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState(false);
@@ -90,6 +91,12 @@ export default function ConnectWhatsApp() {
         setWebhookInfo(await api.getWebhookInfo());
       } catch {
         /* webhook info requires saved config — ignore */
+      }
+      try {
+        const sub = await api.getWebhookSubscription();
+        setSubState((s) => ({ ...s, checking: false, subscribed: !!sub.subscribed }));
+      } catch {
+        setSubState((s) => ({ ...s, checking: false, subscribed: null }));
       }
     } finally {
       setLoading(false);
@@ -513,9 +520,43 @@ export default function ConnectWhatsApp() {
                 <StepLabel icon={<CheckCircleRoundedIcon fontSize="small" />}>Subscribe to events</StepLabel>
                 <Box sx={{ pl: 4, pr: 1, pb: 1 }}>
                   <Typography variant="body2" color="text.secondary">
-                    After verification, click “Manage” and subscribe to the <strong>messages</strong> field so delivery
-                    statuses and incoming messages reach this app.
+                    Subscribe to <strong>messages</strong> and <strong>message_template_status_update</strong> so delivery
+                    statuses and template approvals reach this app instantly.
                   </Typography>
+                  <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 1.5 }}>
+                    {subState.subscribed == null ? (
+                      <Chip size="small" label={subState.checking ? 'Checking…' : 'Unknown'} variant="outlined" />
+                    ) : subState.subscribed ? (
+                      <Chip size="small" color="success" label="Webhooks active" />
+                    ) : (
+                      <Chip size="small" color="warning" label="Not subscribed" variant="outlined" />
+                    )}
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disabled={!configured || subState.subscribing || subState.subscribed}
+                      startIcon={subState.subscribing ? <CircularProgress size={16} color="inherit" /> : undefined}
+                      onClick={async () => {
+                        setSubState((s) => ({ ...s, subscribing: true }));
+                        try {
+                          await api.subscribeWebhooks();
+                          setSubState((s) => ({ ...s, subscribed: true }));
+                          showToast('Subscribed — template approvals now arrive instantly', 'success');
+                        } catch (e) {
+                          showToast(e.message || 'Subscription failed', 'error');
+                        } finally {
+                          setSubState((s) => ({ ...s, subscribing: false }));
+                        }
+                      }}
+                    >
+                      {subState.subscribed ? 'Active' : 'Enable instantly'}
+                    </Button>
+                  </Stack>
+                  {!configured && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                      Save your credentials first — this uses the stored access token, no Meta dashboard needed.
+                    </Typography>
+                  )}
                 </Box>
               </Step>
             </Stepper>
