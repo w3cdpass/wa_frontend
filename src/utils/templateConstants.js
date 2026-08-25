@@ -12,8 +12,8 @@ export const CATEGORIES = [
     value: 'UTILITY',
     title: 'Utility',
     tagline: 'Transactional updates',
-    description: 'Order confirmations, payment reminders, appointment updates, shipping notifications. Highest approval rate, sent any time.',
-    examples: '“Your order #4521 is confirmed”, “Payment due reminder”',
+    description: 'Messages triggered by a customer action — order confirmations, shipping updates, refunds, opt-in confirmations. Highest approval rate, sent any time. Warning: if the content contains offers or promotions, Meta now auto-reclassifies it as Marketing before approving, and you pay marketing rates per message.',
+    examples: '“Your order {{1}} is confirmed”, “Your refund for {{1}} has been processed”',
   },
   {
     value: 'AUTHENTICATION',

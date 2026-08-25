@@ -74,6 +74,19 @@ const api = {
   updateTemplate: (id, data) => axiosInstance.put(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id), data),
   deleteTemplate: (id) => axiosInstance.delete(ENDPOINTS.WHATSAPP.TEMPLATE_BY_ID(id)),
   submitTemplate: (id) => axiosInstance.post(ENDPOINTS.WHATSAPP.TEMPLATE_SUBMIT(id)),
+
+  listVariables: (params) => axiosInstance.get(ENDPOINTS.VARIABLES.LIST, { params }),
+  createVariable: (data) => axiosInstance.post(ENDPOINTS.VARIABLES.CREATE, data),
+  updateVariable: (id, data) => axiosInstance.put(ENDPOINTS.VARIABLES.BY_ID(id), data),
+  deleteVariable: (id) => axiosInstance.delete(ENDPOINTS.VARIABLES.BY_ID(id)),
+
+  listBroadcasts: (params) => axiosInstance.get(ENDPOINTS.BROADCASTS.LIST, { params }),
+  createBroadcast: (data) => axiosInstance.post(ENDPOINTS.BROADCASTS.CREATE, data),
+  previewAudienceCount: (audience) => axiosInstance.post(ENDPOINTS.BROADCASTS.PREVIEW_COUNT, { audience }),
+  getBroadcast: (id) => axiosInstance.get(ENDPOINTS.BROADCASTS.BY_ID(id)),
+  pauseBroadcast: (id) => axiosInstance.post(ENDPOINTS.BROADCASTS.PAUSE(id)),
+  resumeBroadcast: (id) => axiosInstance.post(ENDPOINTS.BROADCASTS.RESUME(id)),
+  contactTags: () => axiosInstance.get(ENDPOINTS.CONTACTS.TAGS),
 };
 
 export default api;

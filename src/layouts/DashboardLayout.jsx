@@ -15,6 +15,8 @@ import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceW
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import NoteAltRoundedIcon from '@mui/icons-material/NoteAltRounded';
+import DataObjectRoundedIcon from '@mui/icons-material/DataObjectRounded';
+import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +28,8 @@ const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: DashboardRoundedIcon },
   { label: 'Connect WhatsApp', path: '/connect-whatsapp', icon: WhatsAppIcon },
   { label: 'Templates', path: '/templates', icon: NoteAltRoundedIcon },
+  { label: 'Variables', path: '/variables', icon: DataObjectRoundedIcon },
+  { label: 'Send Template', path: '/send-template', icon: CampaignRoundedIcon },
   { label: 'Send via WA', path: '/send-via-wa', icon: SendRoundedIcon },
   { label: 'ChatBot', path: '/chatbot', icon: PersonRoundedIcon },
   { label: 'WA History', path: '/wa-history', icon: HistoryRoundedIcon },
@@ -40,6 +44,8 @@ const PAGE_TITLES = {
   '/connect-whatsapp': 'Connect WhatsApp',
   '/templates': 'Message Templates',
   '/templates/new': 'Create Template',
+  '/variables': 'Global Variables',
+  '/send-template': 'Send Template Campaign',
   '/send-via-wa': 'Send via WA',
   '/chatbot': 'ChatBot',
   '/wa-history': 'WA History',

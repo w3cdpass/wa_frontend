@@ -69,6 +69,7 @@ export const ENDPOINTS = {
     BULK_DELETE: '/contacts/bulk-delete',   // POST  { ids: [] }
     GROUPS: '/contacts/groups',             // GET/POST list & create groups
     GROUP_BY_ID: (id) => `/contacts/groups/${id}`, // PUT/DELETE
+    TAGS: '/contacts/tags',                 // GET distinct tags
   },
 
   // ---------------- CREDIT MANAGEMENT ----------------
@@ -106,6 +107,19 @@ export const ENDPOINTS = {
     TEMPLATE_CREATE: '/whatsapp/templates', // POST  full payload (see validators)
     TEMPLATE_BY_ID: (id) => `/whatsapp/templates/${id}`, // GET / PUT / DELETE
     TEMPLATE_SUBMIT: (id) => `/whatsapp/templates/${id}/submit`, // POST -> Meta approval
+  },
+  VARIABLES: {
+    LIST: '/variables',                      // GET  ?search=
+    CREATE: '/variables',                    // POST
+    BY_ID: (id) => `/variables/${id}`,       // PUT / DELETE
+  },
+  BROADCASTS: {
+    LIST: '/broadcasts',                     // GET ?page=&limit=
+    CREATE: '/broadcasts',                   // POST create + start sending
+    PREVIEW_COUNT: '/broadcasts/preview-count', // POST { audience } -> { count }
+    BY_ID: (id) => `/broadcasts/${id}`,      // GET live status
+    PAUSE: (id) => `/broadcasts/${id}/pause`,   // POST
+    RESUME: (id) => `/broadcasts/${id}/resume`, // POST
   },
 };
 

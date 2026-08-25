@@ -1,25 +1,26 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Grid, Card, Typography, Stack, Button, TextField, MenuItem, Chip,
-  Alert, Divider, IconButton, Tooltip, Paper, InputAdornment, RadioGroup,
+  Alert, IconButton, Tooltip, Paper, InputAdornment, RadioGroup,
   FormControlLabel, Radio, FormHelperText, CircularProgress,
 } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DataObjectRoundedIcon from '@mui/icons-material/DataObjectRounded';
-import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
-import CallRoundedIcon from '@mui/icons-material/CallRounded';
-import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
-import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
-import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
-import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
+import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import LightbulbRoundedIcon from '@mui/icons-material/LightbulbRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import { useToast } from '../context/ToastContext';
+import WhatsAppBubble, { BUTTON_ICONS } from '../components/WhatsAppBubble';
 import api from '../api/api';
+import { checkTemplateCompliance } from '../utils/templateCompliance';
 import {
   CATEGORIES, LANGUAGES, BUTTON_TYPES, BUTTON_RULES, TEMPLATE_TYPES,
   LIMITS, extractVariables,
@@ -40,15 +41,6 @@ const EMPTY_STATE = {
   sampleValues: { body: [], header: [] },
 };
 
-const BUTTON_ICONS = {
-  QUICK_REPLY: <ChatBubbleOutlineRoundedIcon fontSize="small" />,
-  URL: <LinkRoundedIcon fontSize="small" />,
-  PHONE_NUMBER: <CallRoundedIcon fontSize="small" />,
-  COPY_CODE: <ContentCopyRoundedIcon fontSize="small" />,
-  FLOW: <AccountTreeRoundedIcon fontSize="small" />,
-  CATALOG: <StorefrontRoundedIcon fontSize="small" />,
-};
-
 export default function TemplateBuilder() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -58,25 +50,96 @@ export default function TemplateBuilder() {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const bodyVars = extractVariables(form.bodyText);
-  const headerVars = form.headerType === 'text' ? extractVariables(form.headerContent) : [];
+  // ---- Global variables ----
+  // Users type {{product_name}} in the body. WhatsApp only accepts numbered
+  // placeholders, so we convert names to {{1}},{{2}}… on save and auto-fill
+  // reviewer samples from each variable's definition.
+  const [globalVars, setGlobalVars] = useState([]);
+  useEffect(() => {
+    api.listVariables()
+      .then((res) => setGlobalVars(res.variables || []))
+      .catch(() => {});
+  }, []);
 
-  // Keep sample values aligned with detected variables
-  const samples = useMemo(
-    () => bodyVars.map((_, i) => form.sampleValues.body[i] || ''),
-    [bodyVars, form.sampleValues.body]
-  );
-
-  const setSample = (index, value) => {
-    setForm((f) => {
-      const next = [...f.sampleValues.body];
-      next[index] = value;
-      return { ...f, sampleValues: { ...f.sampleValues, body: next } };
-    });
+  const TOKEN_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*|\d+)\s*\}\}/g;
+  const CONTACT_DEMO_VALUES = {
+    name: 'Ravi Sharma',
+    phone: '+91 98765 43210',
+    tags: 'vip, regular',
   };
 
-  const insertVariable = () => {
-    const n = extractVariables(form.bodyText).length + 1;
+  function analyzeVars(text) {
+    const assign = new Map();
+    const positions = [];
+    let n = 0;
+    const idOf = (raw) => (/^\d+$/.test(raw) ? `#${raw}` : `n:${raw.toLowerCase()}`);
+    for (const m of String(text || '').matchAll(TOKEN_RE)) {
+      const raw = m[1];
+      const id = idOf(raw);
+      if (!assign.has(id)) {
+        n += 1;
+        assign.set(id, n);
+        positions.push({ num: n, raw, id });
+      }
+    }
+    const normalized = String(text || '').replace(TOKEN_RE, (_, raw) => `{{${assign.get(idOf(raw))}}}`);
+    return { normalized, positions };
+  }
+
+  const varForName = (raw) => (/^\d+$/.test(raw)
+    ? null
+    : globalVars.find((v) => v.name === raw.toLowerCase()));
+
+  function autoSample(entry) {
+    if (entry.id.startsWith('#')) return '';
+    const v = varForName(entry.raw);
+    if (!v) return '';
+    if (v.source === 'static') return v.staticValue || '';
+    if (v.contactField?.startsWith('customFields.')) return 'Sample';
+    return CONTACT_DEMO_VALUES[v.contactField] || 'Sample';
+  }
+
+  // Body analysis: named tokens -> sequential numbers, with live samples
+  const bodyAnalysis = useMemo(() => analyzeVars(form.bodyText), [form.bodyText]);
+  const [bodyOverrides, setBodyOverrides] = useState({});
+  const samples = useMemo(
+    () => bodyAnalysis.positions.map(
+      (p) => (bodyOverrides[p.num] !== undefined ? bodyOverrides[p.num] : autoSample(p))
+    ),
+    [bodyAnalysis, bodyOverrides, globalVars]
+  );
+
+  const unknownBodyVars = bodyAnalysis.positions
+    .filter((p) => p.id.startsWith('n:') && !varForName(p.raw))
+    .map((p) => p.raw);
+
+  const headerAnalysis = useMemo(
+    () => (form.headerType === 'text' ? analyzeVars(form.headerContent) : { normalized: '', positions: [] }),
+    [form.headerType, form.headerContent]
+  );
+  const [headerOverride, setHeaderOverride] = useState(null);
+  const headerSample = useMemo(() => (
+    headerAnalysis.positions.length === 0
+      ? null
+      : headerOverride ?? autoSample(headerAnalysis.positions[0]) ?? ''
+  ), [headerAnalysis, headerOverride, globalVars]);
+
+  // Legacy numeric list kept for helper-text counts
+  const bodyVars = bodyAnalysis.positions;
+
+  const setSample = (num, value) => {
+    setBodyOverrides((prev) => ({ ...prev, [num]: value }));
+  };
+
+  const insertVariable = (name) => {
+    setForm((f) => ({
+      ...f,
+      bodyText: `${f.bodyText}${f.bodyText && !f.bodyText.endsWith(' ') ? ' ' : ''}{{${name}}}`,
+    }));
+  };
+
+  const insertNumbered = () => {
+    const n = bodyAnalysis.positions.length + 1;
     setForm((f) => ({ ...f, bodyText: `${f.bodyText}{{${n}}}` }));
   };
 
@@ -152,7 +215,10 @@ export default function TemplateBuilder() {
       if (b.type === 'CATALOG' && !b.catalogId.trim()) return `Button "${b.text}": catalog ID is required`;
     }
     // every variable should have a sample so Meta can review the template
-    if (samples.some((s) => !s.trim())) return 'Fill in a sample value for every {{variable}} — Meta reviews these';
+    if (unknownBodyVars.length > 0) {
+      return `Unknown variable(s): ${unknownBodyVars.map((v) => `{{${v}}}`).join(', ')} — create ${unknownBodyVars.length > 1 ? 'them' : 'it'} on the Variables page first`;
+    }
+    if (samples.some((s) => !String(s).trim())) return 'Fill in a sample value for every {{variable}} — Meta reviews these';
     return null;
   };
 
@@ -162,22 +228,22 @@ export default function TemplateBuilder() {
     language: form.language,
     templateType: form.templateType,
     headerType: form.templateType === 'carousel' ? 'none' : form.headerType,
-    headerContent: form.headerType === 'text' ? form.headerContent : null,
+    headerContent: form.headerType === 'text' ? headerAnalysis.normalized : null,
     headerMediaUrl: ['image', 'video', 'document'].includes(form.headerType) ? form.headerMediaUrl : null,
-    bodyText: form.bodyText,
+    bodyText: bodyAnalysis.normalized,
     footerText: form.footerText || null,
     buttons: form.templateType === 'carousel' ? [] : form.buttons.map(cleanButton),
     cards:
       form.templateType === 'carousel'
         ? form.cards.map((c) => ({
             headerMediaUrl: c.headerMediaUrl,
-            bodyText: c.bodyText,
+            bodyText: analyzeVars(c.bodyText).normalized,
             buttons: c.buttons.map(cleanButton),
           }))
         : [],
     sampleValues: {
-      body: bodyVars.map((_, i) => samples[i] || ''),
-      header: headerVars.map((_, i) => (i === 0 && form.sampleValues.header[0]) || 'sample'),
+      body: samples.map((s) => String(s ?? '')),
+      header: headerSample != null ? [headerSample] : [],
     },
   });
 
@@ -190,6 +256,22 @@ export default function TemplateBuilder() {
     ...(b.type === 'FLOW' ? { flowId: b.flowId, flowAction: 'NAVIGATE' } : {}),
     ...(b.type === 'CATALOG' ? { catalogId: b.catalogId, productRetailerId: b.productRetailerId || undefined, isSingleProduct: false } : {}),
   });
+
+  // Live Meta-guideline check — same rules the backend enforces before submit
+  const compliance = useMemo(() => checkTemplateCompliance({
+    category: form.category,
+    language: form.language,
+    headerType: form.headerType,
+    headerContent: headerAnalysis.normalized,
+    bodyText: bodyAnalysis.normalized,
+    footerText: form.footerText,
+    buttons: form.buttons.map(cleanButton),
+    cards: form.cards.map((c) => ({ bodyText: c.bodyText, buttons: c.buttons })),
+    sampleValues: {
+      body: samples.map((s) => String(s ?? '')),
+      header: headerSample != null ? [String(headerSample)] : [],
+    },
+  }), [form, bodyAnalysis, headerAnalysis, samples, headerSample]);
 
   const handleSave = async () => {
     const err = validateLocal();
@@ -209,11 +291,27 @@ export default function TemplateBuilder() {
   const handleSubmit = async () => {
     const err = validateLocal();
     if (err) return showToast(err, 'error');
+    if (!compliance.passed) {
+      showToast(compliance.errors[0].message, 'error');
+      return;
+    }
+    if (
+      compliance.warnings.length
+      && !window.confirm(
+        `${compliance.warnings.length} approval risk${compliance.warnings.length > 1 ? 's' : ''} detected:\n\n- ${compliance.warnings.map((w) => w.message).join('\n- ')}\n\nSubmit anyway? Meta may reject or reclassify the template.`,
+      )
+    ) return;
     setSubmitting(true);
     try {
       const created = await api.createTemplate(buildPayload());
-      await api.submitTemplate(created._id);
-      showToast('Submitted to Meta — status will move to APPROVED/PENDING after review', 'success');
+      const result = await api.submitTemplate(created._id);
+      const extraWarnings = result?.review?.warnings || [];
+      showToast(
+        extraWarnings.length
+          ? `Submitted to Meta — ${extraWarnings.length} risk${extraWarnings.length > 1 ? 's' : ''} noted: review usually completes within minutes to 24 h`
+          : 'Submitted to Meta — review usually completes within minutes to a few hours',
+        'success',
+      );
       navigate('/templates');
     } catch (e) {
       showToast(e.message || 'Submission failed', 'error');
@@ -324,8 +422,8 @@ export default function TemplateBuilder() {
                   <MenuItem value="none">None</MenuItem>
                   <MenuItem value="text">Text</MenuItem>
                   <MenuItem value="image">Image (JPEG/PNG ≤5MB)</MenuItem>
-                  <MenuItem value="video">Video (MP4 ≤30MB)</MenuItem>
-                  <MenuItem value="document">Document / PDF (≤30MB)</MenuItem>
+                  <MenuItem value="video">Video (MP4 ≤16MB)</MenuItem>
+                  <MenuItem value="document">Document (PDF ≤100MB)</MenuItem>
                 </TextField>
                 {form.headerType === 'text' && (
                   <>
@@ -335,15 +433,19 @@ export default function TemplateBuilder() {
                       onChange={set('headerContent')}
                       fullWidth size="small" sx={{ mt: 2 }}
                       inputProps={{ maxLength: LIMITS.HEADER_TEXT_MAX }}
-                      helperText={`${form.headerContent.length}/${LIMITS.HEADER_TEXT_MAX}${headerVars.length ? ' — 1 variable allowed, set its sample below' : ''}`}
+                      helperText={`${form.headerContent.length}/${LIMITS.HEADER_TEXT_MAX}${headerAnalysis.positions.length ? ` — 1 variable allowed ({{${headerAnalysis.positions[0].raw}}})` : ' — supports {{variable_name}} or {{1}}'}`}
                     />
-                    {headerVars.length > 0 && (
+                    {headerAnalysis.positions.length > 0 && (
                       <TextField
-                        label={`Sample for {{${headerVars[0]}}}`}
-                        value={form.sampleValues.header[0] || ''}
-                        onChange={(e) => setForm((f) => ({ ...f, sampleValues: { ...f.sampleValues, header: [e.target.value] } }))}
+                        label={`Sample for → {{${headerAnalysis.positions[0].num}}}`}
+                        value={headerSample ?? ''}
+                        onChange={(e) => setHeaderOverride(e.target.value)}
                         fullWidth size="small" sx={{ mt: 1.5 }}
-                        helperText="Meta reviewers see this as the example content"
+                        helperText={
+                          headerAnalysis.positions[0].id.startsWith('n:')
+                            ? 'Auto-filled from the variable definition — Meta reviewers see this'
+                            : 'Meta reviewers see this as the example content'
+                        }
                       />
                     )}
                   </>
@@ -365,30 +467,71 @@ export default function TemplateBuilder() {
             <Card sx={{ p: 3, borderRadius: 3 }}>
               <SectionTitle
                 title="Body text"
-                hint="The main content. Use {{1}}, {{2}}… for dynamic values like names, order IDs or OTP codes."
+                hint="Type {{1}}, {{2}}… or click a variable chip below to insert {{variable_name}} — names are converted to numbers automatically when saved, and the preview shows real values."
               />
               <TextField
                 value={form.bodyText}
                 onChange={set('bodyText')}
                 multiline rows={5} fullWidth sx={{ mt: 1.5 }}
                 inputProps={{ maxLength: LIMITS.BODY_MAX }}
-                helperText={`${form.bodyText.length}/${LIMITS.BODY_MAX} · ${bodyVars.length} variable(s)`}
+                placeholder="Hi! On this {{product_name}} there is {{discount}}% off today only."
+                helperText={`${form.bodyText.length}/${LIMITS.BODY_MAX} · ${bodyVars.length} variable position(s)`}
               />
-              <Button size="small" startIcon={<DataObjectRoundedIcon />} onClick={insertVariable} sx={{ mt: 1 }}>
-                Insert variable {'{{n}}'}
-              </Button>
+
+              {/* Global variable chips — click to insert */}
+              <Stack direction="row" flexWrap="wrap" gap={0.75} alignItems="center" sx={{ mt: 1.25 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                  Insert variable:
+                </Typography>
+                {globalVars.length === 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    No global variables yet — create them on the Variables page.
+                  </Typography>
+                )}
+                {globalVars.map((v) => {
+                  const used = bodyAnalysis.positions.some((p) => p.id === `n:${v.name}`);
+                  return (
+                    <Chip
+                      key={v._id}
+                      size="small"
+                      clickable
+                      onClick={() => insertVariable(v.name)}
+                      label={v.name}
+                      variant={used ? 'filled' : 'outlined'}
+                      title={v.source === 'static' ? `Static: "${v.staticValue}"` : `From contact: ${v.contactField}`}
+                    />
+                  );
+                })}
+                <Button size="small" startIcon={<DataObjectRoundedIcon />} onClick={insertNumbered}>
+                  Numbered {'{{n}}'}
+                </Button>
+              </Stack>
+
+              {unknownBodyVars.length > 0 && (
+                <Alert severity="error" sx={{ mt: 1.5, borderRadius: 2 }}>
+                  Unknown variable(s): {unknownBodyVars.map((v) => `{{${v}}}`).join(', ')} — create them on the Variables page first.
+                </Alert>
+              )}
+
               {bodyVars.length > 0 && (
                 <Alert severity="info" icon={<InfoOutlinedIcon fontSize="small" />} sx={{ mt: 1.5, borderRadius: 2 }}>
                   <Typography variant="caption" fontWeight={700}>Sample values (shown to Meta reviewers):</Typography>
                   <Grid container spacing={1} sx={{ mt: 0.25 }}>
-                    {bodyVars.map((v, i) => (
-                      <Grid item xs={12} sm={4} key={v}>
+                    {bodyVars.map((p) => (
+                      <Grid item xs={12} sm={4} key={p.num}>
                         <TextField
                           size="small" fullWidth
-                          label={'{{' + v + '}}'}
-                          value={samples[i]}
-                          onChange={(e) => setSample(i, e.target.value)}
-                          error={!samples[i].trim()}
+                          label={`${p.id.startsWith('n:') ? `{{${p.raw}}}` : ''} → {{${p.num}}}`}
+                          value={samples[p.num - 1] || ''}
+                          onChange={(e) => setSample(p.num, e.target.value)}
+                          error={!String(samples[p.num - 1] || '').trim()}
+                          helperText={
+                            p.id.startsWith('n:')
+                              ? (varForName(p.raw)?.source === 'contact'
+                                ? `auto: from contact.${varForName(p.raw).contactField}`
+                                : 'auto: from static value')
+                              : undefined
+                          }
                         />
                       </Grid>
                     ))}
@@ -434,6 +577,17 @@ export default function TemplateBuilder() {
                   placeholder='e.g. Reply STOP to unsubscribe'
                   helperText={`${form.footerText.length}/${LIMITS.FOOTER_MAX}`}
                 />
+                {form.category === 'MARKETING' && !form.footerText && (
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>
+                    <WarningAmberRoundedIcon fontSize="small" sx={{ color: 'warning.main' }} />
+                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                      Marketing templates approve more reliably with an opt-out.
+                    </Typography>
+                    <Button size="small" onClick={() => setForm((f) => ({ ...f, footerText: 'Reply STOP to unsubscribe' }))}>
+                      Add
+                    </Button>
+                  </Stack>
+                )}
               </Card>
             )}
 
@@ -539,7 +693,14 @@ export default function TemplateBuilder() {
               </Stack>
 
               <Box sx={{ p: 2, minHeight: 320 }}>
-                <MessagePreview form={form} bodyVars={bodyVars} samples={samples} />
+                <WhatsAppBubble
+                  template={{
+                    ...form,
+                    bodyText: bodyAnalysis.normalized,
+                    headerContent: headerAnalysis.normalized || form.headerContent,
+                    sampleValues: { ...form.sampleValues, body: samples, header: headerSample != null ? [headerSample] : [] },
+                  }}
+                />
 
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
                   Live preview · {LANGUAGES.find((l) => l.code === form.language)?.label}
@@ -547,9 +708,13 @@ export default function TemplateBuilder() {
               </Box>
             </Card>
 
+            <ApprovalReadiness compliance={compliance} />
+
             <Alert severity="info" sx={{ mt: 2, borderRadius: 2 }}>
-              <strong>Approval tips:</strong> fill every variable&apos;s sample value, avoid ALL-CAPS & excessive emojis in marketing,
-              and match your category (promotions → Marketing, receipts → Utility). Review usually takes seconds to a few minutes.
+              <strong>How review works:</strong> Meta first checks your category, then the content — usually within minutes to a few hours
+              (worst case 24 h). While pending, the template is read-only, so have templates approved at least a day before campaigns.
+              Fill every sample value, keep wording clear and professional, and match your category (promotions → Marketing,
+              order updates → Utility) to avoid reclassification.
             </Alert>
           </Box>
         </Grid>
@@ -567,108 +732,54 @@ function SectionTitle({ title, hint }) {
   );
 }
 
-function renderWithVarChips(text, filledValues) {
-  const parts = [];
-  let last = 0;
-  const re = /{{(\d+)}}/g;
-  let m;
-  let k = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(<span key={`t${k++}`}>{text.slice(last, m.index)}</span>);
-    const val = filledValues?.[m[1] - 1];
-    parts.push(
-      val ? (
-        <strong key={`v${k++}`}>{val}</strong>
-      ) : (
-        <Box component="span" key={`v${k++}`} sx={{ bgcolor: '#DFF3FB', border: '1px solid #A6DEEB', borderRadius: 0.75, px: 0.5, mx: 0.15, fontFamily: 'monospace', fontSize: 12 }}>{`{{${m[1]}}}`}</Box>
-      )
-    );
-    last = m.index + m[0].length;
-  }
-  parts.push(<span key={`t${k++}`}>{text.slice(last)}</span>);
-  return parts;
-}
+const LEVEL_META = {
+  error: { icon: <ErrorOutlineRoundedIcon fontSize="small" color="error" />, label: 'Blocks submission' },
+  warning: { icon: <WarningAmberRoundedIcon fontSize="small" sx={{ color: 'warning.main' }} />, label: 'Approval risk' },
+  tip: { icon: <LightbulbRoundedIcon fontSize="small" color="info" />, label: 'Tip' },
+};
 
-function MessagePreview({ form, bodyVars, samples }) {
-  const isCarousel = form.templateType === 'carousel';
-
+function ApprovalReadiness({ compliance }) {
+  const { errors, warnings, tips, passed } = compliance;
+  const items = [
+    ...errors.map((e) => ({ ...e, level: 'error' })),
+    ...warnings.map((w) => ({ ...w, level: 'warning' })),
+    ...tips.map((t) => ({ ...t, level: 'tip' })),
+  ];
   return (
-    <Box sx={{ maxWidth: 340, ml: 'auto' }}>
-      <Box sx={{ bgcolor: '#DCF8C6', borderRadius: 2, borderTopRightRadius: 0, p: 1.25, boxShadow: 1 }}>
-        {/* Header */}
-        {!isCarousel && form.headerType === 'text' && (
-          <Typography fontWeight={700} fontSize={14} sx={{ mb: 0.5 }}>
-            {renderWithVarChips(form.headerContent, form.sampleValues.header)}
-          </Typography>
+    <Card sx={{ mt: 2, borderRadius: 3 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+        {passed ? <CheckCircleRoundedIcon color="success" /> : <VerifiedRoundedIcon color="disabled" />}
+        <Typography variant="subtitle2" fontWeight={800}>Approval readiness</Typography>
+        <Box sx={{ flex: 1 }} />
+        {passed && warnings.length === 0 && tips.length <= 1 && (
+          <Chip size="small" color="success" label="Looks great" />
         )}
-        {!isCarousel && ['image'].includes(form.headerType) && (
-          form.headerMediaUrl ? (
-            <Box component="img" src={form.headerMediaUrl} alt="header" onError={(e) => { e.currentTarget.style.display = 'none'; }} sx={{ width: '100%', borderRadius: 1, mb: 0.75, maxHeight: 180, objectFit: 'cover' }} />
-          ) : (
-            <Box sx={{ bgcolor: '#CFE9F5', borderRadius: 1, mb: 0.75, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#455964', fontSize: 12 }}>
-              Image header
-            </Box>
-          )
+        {!passed && (
+          <Chip
+            size="small" color="error"
+            label={`${errors.length} blocker${errors.length > 1 ? 's' : ''}`}
+          />
         )}
-        {!isCarousel && ['video', 'document'].includes(form.headerType) && (
-          <Box sx={{ bgcolor: '#CFE9F5', borderRadius: 1, mb: 0.75, height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#455964', fontSize: 12 }}>
-            {form.headerType === 'video' ? '▶ Video header' : '📄 Document header'}
-          </Box>
+        {passed && warnings.length > 0 && (
+          <Chip size="small" variant="outlined" color="warning" label={`${warnings.length} risk${warnings.length > 1 ? 's' : ''}`} />
         )}
-
-        {/* Body */}
-        <Typography fontSize={13.5} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {renderWithVarChips(form.bodyText, bodyVars.map((_, i) => samples[i]))}
-        </Typography>
-
-        {/* Footer */}
-        {form.footerText && (
-          <Typography fontSize={11.5} color="#6A7175" sx={{ mt: 0.75 }}>{form.footerText}</Typography>
+      </Stack>
+      <Stack spacing={1.25} sx={{ p: 2 }}>
+        {items.length === 0 && (
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <CheckCircleRoundedIcon fontSize="small" color="success" sx={{ mt: 0.25 }} />
+            <Typography variant="body2">No issues found — this follows Meta&apos;s template guidelines.</Typography>
+          </Stack>
         )}
-
-        {/* Meta row */}
-        <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={0.4}>
-          <Typography fontSize={10.5} color="#8696A0">12:45</Typography>
-          <Box sx={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '3px solid #53BDEB', borderBottom: '5px solid #53BDEB', transform: 'rotate(-25deg)' }} />
-        </Stack>
-
-        {/* Buttons */}
-        {form.buttons.length > 0 && (
-          <>
-            <Divider sx={{ my: 1, borderColor: 'rgba(0,0,0,0.08)' }} />
-            <Stack divider={<Divider flexItem sx={{ borderColor: 'rgba(0,0,0,0.06)' }} />}>
-              {form.buttons.map((b, i) => (
-                <Stack key={i} direction="row" spacing={0.75} alignItems="center" justifyContent="center" sx={{ py: 0.75, color: '#00A5F4' }}>
-                  {BUTTON_ICONS[b.type]}
-                  <Typography fontSize={13} fontWeight={600}>{b.text || `${b.type.toLowerCase()} button`}</Typography>
-                </Stack>
-              ))}
-            </Stack>
-          </>
-        )}
-      </Box>
-
-      {/* Carousel preview */}
-      {isCarousel && (
-        <Stack direction="row" spacing={1} sx={{ mt: 1, overflowX: 'auto', pb: 1 }}>
-          {form.cards.map((card, i) => (
-            <Box key={i} sx={{ minWidth: 200, bgcolor: '#DCF8C6', borderRadius: 2, p: 1, boxShadow: 1 }}>
-              <Box sx={{ height: 100, borderRadius: 1, mb: 0.75, overflow: 'hidden', bgcolor: '#CFE9F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {card.headerMediaUrl
-                  ? <Box component="img" src={card.headerMediaUrl} alt={`card ${i + 1}`} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  : <Typography fontSize={11} color="#455964">Image</Typography>}
-              </Box>
-              <Typography fontSize={12.5} sx={{ minHeight: 34, wordBreak: 'break-word' }}>{card.bodyText || `Card ${i + 1} text`}</Typography>
-              {card.buttons.filter((b) => b.text).map((b, j) => (
-                <Stack key={j} direction="row" spacing={0.5} alignItems="center" justifyContent="center" sx={{ pt: 0.5, color: '#00A5F4' }}>
-                  {BUTTON_ICONS[b.type]}
-                  <Typography fontSize={12} fontWeight={600}>{b.text}</Typography>
-                </Stack>
-              ))}
-            </Box>
-          ))}
-        </Stack>
-      )}
-    </Box>
+        {items.map((item) => (
+          <Stack key={`${item.level}-${item.code}`} direction="row" spacing={1} alignItems="flex-start">
+            <Box sx={{ mt: 0.25 }}>{LEVEL_META[item.level].icon}</Box>
+            <Typography variant="caption" color={item.level === 'error' ? 'error' : item.level === 'warning' ? 'warning.dark' : 'text.secondary'}>
+              {item.message}
+            </Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </Card>
   );
 }
