@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Card, Typography, Stack, Button, TextField, Chip, IconButton,
   LinearProgress, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Alert, Tooltip, CircularProgress,
+  TableHead, TableRow, Alert, Tooltip, CircularProgress, Select, MenuItem, InputLabel, FormControl,
 } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -107,17 +107,19 @@ export default function SendFlow() {
         {/* Step 1: Pick flow */}
         <Card sx={{ p: 3, borderRadius: 3 }}>
           <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5 }}>1. Pick a flow</Typography>
-          <TextField
-            select fullWidth size="small"
-            value={selectedFlowId}
-            onChange={(e) => setSelectedFlowId(e.target.value)}
-            SelectProps={{ native: true }}
-          >
-            <option value="">Select a flow…</option>
-            {flows.map((f) => (
-              <option key={f._id} value={f._id}>{f.name} ({f.status})</option>
-            ))}
-          </TextField>
+          <FormControl fullWidth size="small">
+            <InputLabel>Select a flow…</InputLabel>
+            <Select
+              label="Select a flow…"
+              value={selectedFlowId}
+              onChange={(e) => setSelectedFlowId(e.target.value)}
+            >
+              <MenuItem value=""><em>Select a flow…</em></MenuItem>
+              {flows.map((f) => (
+                <MenuItem key={f._id} value={f._id}>{f.name} ({f.status})</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {selectedFlow && (
             <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
               <strong>{selectedFlow.name}</strong> — {selectedFlow.nodes?.length || 0} blocks, first block: <code>{startNode?.nodeType || 'unknown'}</code>
