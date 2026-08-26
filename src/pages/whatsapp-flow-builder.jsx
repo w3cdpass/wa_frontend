@@ -52,7 +52,7 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import Drawflow from 'drawflow';
 import api from '../api/api';
 import WhatsAppBubble from '../components/WhatsAppBubble';
-import { uploadTemplateImage, uploadTemplateMediaFromUrl } from '../lib/supabase';
+import { uploadTemplateImage, uploadTemplateMediaFromUrl, uploadMediaFile, deleteMediaByUrl } from '../lib/supabase';
 import 'drawflow/dist/drawflow.min.css';
 import dayjs from 'dayjs';
 import { useToast } from '../context/ToastContext';
@@ -530,59 +530,95 @@ function KeyValueEditor({ value, onChange }) {
   );
 }
 
-function MediaField({ value, onChange }) {
+function MediaField({ value, onChange, accept = 'image/*', label = 'Media' }) {
   const fileRef = useRef(null);
-  const setImage = (file) => {
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (file) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 640;
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        onChange(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+    setUploading(true);
+    try {
+      const { url } = await uploadMediaFile(file, 'media');
+      onChange(url);
+    } catch (err) {
+      console.warn('Supabase upload failed, using local preview:', err);
+      const reader = new FileReader();
+      reader.onload = () => onChange(reader.result);
+      reader.readAsDataURL(file);
+    } finally {
+      setUploading(false);
+    }
   };
-  return value ? (
-    <Box
-      onClick={() => fileRef.current?.click()}
-      sx={{
-        position: 'relative', height: 100, borderRadius: 1, overflow: 'hidden', cursor: 'pointer',
-        border: '1px solid', borderColor: 'divider', '&:hover .ov': { opacity: 1 },
-      }}
-    >
-      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => setImage(e.target.files?.[0])} />
-      <Box component="img" src={value} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      <Box
-        className="ov"
-        sx={{
-          position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,.45)', color: '#fff', fontSize: 11,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity .15s',
-        }}
-      >
-        Change image
-      </Box>
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (value && value.startsWith('http')) {
+      await deleteMediaByUrl(value).catch(() => {});
+    }
+    onChange('');
+  };
+
+  const isPdf = value && (value.includes('.pdf') || value.includes('application/pdf'));
+
+  return (
+    <Box>
+      <Typography sx={{ fontSize: 10.5, color: 'text.secondary', mb: 0.25 }}>{label}</Typography>
+      <input ref={fileRef} type="file" accept={accept} hidden onChange={(e) => handleUpload(e.target.files?.[0])} />
+      {value ? (
+        isPdf ? (
+          <Box
+            onClick={() => !uploading && fileRef.current?.click()}
+            sx={{
+              position: 'relative', height: 80, borderRadius: 1, cursor: 'pointer', p: 1.5,
+              border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1,
+              '&:hover .ov': { opacity: 1 },
+            }}
+          >
+            <Box sx={{ fontSize: 28 }}>📄</Box>
+            <Box sx={{ fontSize: 11, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {value.split('/').pop()?.split('?')[0] || 'PDF file'}
+            </Box>
+            <Box className="ov" sx={{ position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,.45)', color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity .15s' }}>
+              {uploading ? 'Uploading...' : 'Change file'}
+            </Box>
+          </Box>
+        ) : (
+          <Box
+            onClick={() => !uploading && fileRef.current?.click()}
+            sx={{
+              position: 'relative', height: 110, borderRadius: 1, overflow: 'hidden', cursor: 'pointer',
+              border: '1px solid', borderColor: 'divider', '&:hover .ov': { opacity: 1 },
+            }}
+          >
+            <Box component="img" src={value} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <Box className="ov" sx={{ position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,.45)', color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity .15s' }}>
+              {uploading ? 'Uploading...' : 'Change image'}
+            </Box>
+          </Box>
+        )
+      ) : (
+        <Button
+          onClick={() => fileRef.current?.click()}
+          startIcon={<ImageRoundedIcon />}
+          variant="outlined"
+          disabled={uploading}
+          sx={{
+            height: 70, width: '100%', borderStyle: 'dashed', fontSize: 11.5, color: 'text.secondary',
+            '&:hover': { borderColor: THEME.primary, color: THEME.primary, borderStyle: 'dashed' },
+          }}
+        >
+          {uploading ? 'Uploading...' : 'Upload image or PDF'}
+        </Button>
+      )}
+      {value && (
+        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+          <TextField_ size="small" fullWidth value={value} onChange={(e) => onChange(e.target.value)} placeholder="Media URL" sx={{ fontSize: 10 }} />
+          <IconButton size="small" onClick={handleDelete} sx={{ color: THEME.red }}>
+            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Stack>
+      )}
     </Box>
-  ) : (
-    <Button
-      onClick={() => fileRef.current?.click()}
-      startIcon={<ImageRoundedIcon />}
-      variant="outlined"
-      sx={{
-        height: 70, borderStyle: 'dashed', fontSize: 11.5, color: 'text.secondary',
-        '&:hover': { borderColor: THEME.primary, color: THEME.primary, borderStyle: 'dashed' },
-      }}
-    >
-      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => setImage(e.target.files?.[0])} />
-      Browse Media File
-    </Button>
   );
 }
 
@@ -782,7 +818,7 @@ function Field({ field, value, onChange, nodeData }) {
         </Box>
       );
     case 'media':
-      return <MediaField value={value} onChange={onChange} />;
+      return <MediaField value={value} onChange={onChange} accept={field.accept || 'image/*,.pdf'} label={field.label || 'Media'} />;
     case 'template-image':
       return <TemplateImageField value={value} onChange={onChange} headerType={nodeData?.[field.headerTypeKey || 'templateHeaderType']} />;
     default:
