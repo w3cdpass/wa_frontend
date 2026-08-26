@@ -16,6 +16,7 @@
     "@mui/material": "^9.3.1",
     "@mui/x-data-grid": "^9.11.0",
     "@mui/x-date-pickers": "^9.11.0",
+    "@supabase/supabase-js": "^2.112.4",
     "axios": "^1.19.0",
     "dayjs": "^1.11.21",
     "drawflow": "^0.0.60",

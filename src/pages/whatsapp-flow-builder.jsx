@@ -51,6 +51,8 @@ import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import Drawflow from 'drawflow';
 import api from '../api/api';
+import WhatsAppBubble from '../components/WhatsAppBubble';
+import { uploadTemplateMediaFromUrl } from '../lib/supabase';
 import 'drawflow/dist/drawflow.min.css';
 import dayjs from 'dayjs';
 import { useToast } from '../context/ToastContext';
@@ -291,6 +293,8 @@ const summarize = (type, data = {}) => {
       return `↪ ${data.flow || ''}`;
     case 'opt-out':
       return 'Ends flow · marks contact opted out';
+    case 'send-template':
+      return data.templateName ? `📨 ${data.templateName}` : '';
     default:
       return truncate(t, 90);
   }
@@ -594,17 +598,36 @@ function TemplateSelectField({ field, value, onChange }) {
 
   const handleChange = (templateName) => {
     const tpl = templates.find((t) => t.name === templateName);
-    onChange(templateName, {
+    if (!tpl) return onChange(templateName, { templateName });
+
+    const patch = {
       templateName,
-      templateId: tpl?._id,
-      templateCategory: tpl?.category,
-      templateLanguage: tpl?.language,
-      templateButtons: (tpl?.buttons || []).map((b, i) => ({
+      templateId: tpl._id,
+      templateCategory: tpl.category,
+      templateLanguage: tpl.language,
+      templateButtons: (tpl.buttons || []).map((b, i) => ({
         title: b.text,
         type: b.type,
         index: i,
       })),
-    });
+      templateBodyText: tpl.bodyText || '',
+      templateHeaderType: tpl.headerType || 'none',
+      templateHeaderContent: tpl.headerContent || '',
+      templateHeaderMediaUrl: tpl.headerMediaUrl || '',
+      templateFooterText: tpl.footerText || '',
+      templateType: tpl.templateType || 'standard',
+      templateSampleValues: tpl.sampleValues || {},
+      templateFullButtons: tpl.buttons || [],
+    };
+    onChange(templateName, patch);
+
+    if (['image', 'video', 'document'].includes(tpl.headerType) && tpl.headerMediaUrl) {
+      uploadTemplateMediaFromUrl(tpl.headerMediaUrl).then((permanentUrl) => {
+        if (permanentUrl !== tpl.headerMediaUrl) {
+          onChange(templateName, { templateHeaderMediaUrl: permanentUrl });
+        }
+      }).catch(() => {});
+    }
   };
 
   return (
@@ -1957,7 +1980,22 @@ const onDrop = (e) => {
                         </Typography>
                       }
                     />
-                    {showPreview && <WhatsAppPreview type={sel.type} data={selData} />}
+                    {showPreview && sel.type === 'send-template' && selData.templateName ? (
+                      <Box sx={{ bgcolor: '#ECE5DD', borderRadius: 1.5, p: 1.25 }}>
+                        <WhatsAppBubble template={{
+                          headerType: selData.templateHeaderType,
+                          headerContent: selData.templateHeaderContent,
+                          headerMediaUrl: selData.templateHeaderMediaUrl,
+                          bodyText: selData.templateBodyText,
+                          footerText: selData.templateFooterText,
+                          buttons: selData.templateFullButtons || [],
+                          sampleValues: selData.templateSampleValues || {},
+                          templateType: selData.templateType,
+                        }} maxWidth={280} />
+                      </Box>
+                    ) : showPreview ? (
+                      <WhatsAppPreview type={sel.type} data={selData} />
+                    ) : null}
                   </>
                 )}
               </Stack>
