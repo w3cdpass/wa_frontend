@@ -608,6 +608,7 @@ function TemplateSelectField({ field, value, onChange }) {
       templateLanguage: tpl.language,
       templateButtons: (tpl.buttons || []).map((b, i) => ({
         title: b.text,
+        payload: b.payload || '',
         type: b.type,
         index: i,
       })),
