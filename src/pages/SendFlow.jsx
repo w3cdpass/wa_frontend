@@ -4,6 +4,7 @@ import {
   Box, Card, Typography, Stack, Button, TextField, Chip, IconButton,
   LinearProgress, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Alert, Tooltip, CircularProgress, Select, MenuItem, InputLabel, FormControl,
+  Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -38,6 +39,24 @@ export default function SendFlow() {
   const [sending, setSending] = useState(false);
   const [runs, setRuns] = useState(null);
   const [polling, setPolling] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null);
+
+  const handleDelete = async (flowId) => {
+    try {
+      await api.deleteFlow(flowId);
+      setFlows((f) => f.filter((x) => x._id !== flowId));
+      if (selectedFlowId === flowId) {
+        setSelectedFlowId('');
+        setSelectedFlow(null);
+        setRuns(null);
+      }
+      showToast('Flow deleted', 'success');
+    } catch (e) {
+      showToast(e.message || 'Delete failed', 'error');
+    } finally {
+      setDeleteDialog(null);
+    }
+  };
 
   useEffect(() => {
     api.listFlows().then((res) => setFlows(res.flows || [])).catch(() => {});
@@ -121,7 +140,15 @@ export default function SendFlow() {
             </Select>
           </FormControl>
           {selectedFlow && (
-            <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
+            <Alert
+              severity="info"
+              sx={{ mt: 1.5, borderRadius: 2 }}
+              action={
+                <Button size="small" color="error" startIcon={<DeleteOutlineRoundedIcon />} onClick={() => setDeleteDialog(selectedFlow)}>
+                  Delete
+                </Button>
+              }
+            >
               <strong>{selectedFlow.name}</strong> — {selectedFlow.nodes?.length || 0} blocks, first block: <code>{startNode?.nodeType || 'unknown'}</code>
               {startNode?.nodeType === 'send_template' && (
                 <> — template: <strong>{startNode.config?.templateName}</strong></>
@@ -218,6 +245,21 @@ export default function SendFlow() {
           )}
         </Card>
       </Stack>
+
+      <Dialog open={Boolean(deleteDialog)} onClose={() => setDeleteDialog(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete flow?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will permanently delete <strong>{deleteDialog?.name}</strong>. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialog(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={() => handleDelete(deleteDialog?._id)}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
