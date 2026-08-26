@@ -52,7 +52,7 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import Drawflow from 'drawflow';
 import api from '../api/api';
 import WhatsAppBubble from '../components/WhatsAppBubble';
-import { uploadTemplateMediaFromUrl } from '../lib/supabase';
+import { uploadTemplateImage, uploadTemplateMediaFromUrl } from '../lib/supabase';
 import 'drawflow/dist/drawflow.min.css';
 import dayjs from 'dayjs';
 import { useToast } from '../context/ToastContext';
@@ -187,6 +187,7 @@ const SCHEMAS = {
     label: 'Template Message', icon: '📨', category: 'interactive', preview: true, isNew: true,
     fields: [
       { key: 'templateName', type: 'template-select', label: 'Approved template' },
+      { key: 'templateHeaderMediaUrl', type: 'template-image', label: 'Header image (optional override)', headerTypeKey: 'templateHeaderType' },
     ],
   },
   'wait-reply': {
@@ -651,7 +652,75 @@ function TemplateSelectField({ field, value, onChange }) {
   );
 }
 
-function Field({ field, value, onChange }) {
+function TemplateImageField({ value, onChange, headerType }) {
+  if (headerType !== 'image') return null;
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadTemplateImage(file);
+      onChange(url);
+    } catch (err) {
+      console.warn('Supabase upload failed, using local preview:', err);
+      const reader = new FileReader();
+      reader.onload = () => onChange(reader.result);
+      reader.readAsDataURL(file);
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <Box>
+      <Typography sx={{ fontSize: 10.5, color: 'text.secondary', mb: 0.25 }}>Header image</Typography>
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => handleUpload(e.target.files?.[0])} />
+      {value ? (
+        <Box
+          onClick={() => !uploading && fileRef.current?.click()}
+          sx={{
+            position: 'relative', height: 110, borderRadius: 1, overflow: 'hidden', cursor: 'pointer',
+            border: '1px solid', borderColor: 'divider', '&:hover .ov': { opacity: 1 },
+          }}
+        >
+          <Box component="img" src={value} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <Box
+            className="ov"
+            sx={{
+              position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,.45)', color: '#fff', fontSize: 11,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity .15s',
+            }}
+          >
+            {uploading ? 'Uploading…' : 'Change image'}
+          </Box>
+        </Box>
+      ) : (
+        <Button
+          onClick={() => fileRef.current?.click()}
+          startIcon={<ImageRoundedIcon />}
+          variant="outlined"
+          disabled={uploading}
+          sx={{
+            height: 70, width: '100%', borderStyle: 'dashed', fontSize: 11.5, color: 'text.secondary',
+            '&:hover': { borderColor: THEME.primary, color: THEME.primary, borderStyle: 'dashed' },
+          }}
+        >
+          {uploading ? 'Uploading…' : 'Upload image'}
+        </Button>
+      )}
+      {value && (
+        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+          <TextField_ size="small" fullWidth value={value} onChange={(e) => onChange(e.target.value)} placeholder="Image URL" sx={{ fontSize: 10 }} />
+          <IconButton size="small" onClick={() => onChange('')} sx={{ color: THEME.red }}>
+            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+function Field({ field, value, onChange, nodeData }) {
   switch (field.type) {
     case 'text':
       return <TextField_ label={field.label} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />;
@@ -713,6 +782,8 @@ function Field({ field, value, onChange }) {
       );
     case 'media':
       return <MediaField value={value} onChange={onChange} />;
+    case 'template-image':
+      return <TemplateImageField value={value} onChange={onChange} headerType={nodeData?.[field.headerTypeKey || 'templateHeaderType']} />;
     default:
       return null;
   }
@@ -1163,7 +1234,8 @@ export default function WhatsAppFlowBuilder() {
     const next = { ...cur, ...patch };
     const structural =
       (cur.buttons?.length ?? -1) !== (next.buttons?.length ?? -1) ||
-      (cur.rows?.length ?? -1) !== (next.rows?.length ?? -1);
+      (cur.rows?.length ?? -1) !== (next.rows?.length ?? -1) ||
+      (cur.templateButtons?.length ?? -1) !== (next.templateButtons?.length ?? -1);
     ed.updateNodeDataFromId(sel.id, next);
     setSelData(next);
     refreshNodeDom(sel.id, sel.type, next);
@@ -1961,8 +2033,8 @@ const onDrop = (e) => {
                     No configuration needed — this block ends the chat{sel.type === 'opt-out' ? ' and marks the contact opted out.' : '.'}
                   </Typography>
                 )}
-                {selSchema.fields.map((f) => (
-                  <Field key={f.key} field={f} value={selData[f.key]} onChange={(v, extra) => {
+        {selSchema.fields.map((f) => (
+          <Field key={f.key} field={f} value={selData[f.key]} nodeData={selData} onChange={(v, extra) => {
                     const patch = { [f.key]: v };
                     if (extra) Object.assign(patch, extra);
                     patchSelData(patch);
